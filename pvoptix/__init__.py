@@ -1,9 +1,4 @@
 
----
-
-## 📄 **File 2: `pvoptix/__init__.py`** (Outer - for installation)
-
-```python
 """
 PvOptiX - Photovoltaic Parameter Optimization Engine
 

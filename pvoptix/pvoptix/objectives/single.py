@@ -5,6 +5,7 @@ PV-specific objective function for single-diode model (5 parameters).
 from pvoptix.pvoptix.optimization.ga.fitness import global_rmse
 from pvoptix.pvoptix.optimization.ga.genome_mapping import decode_individual
 from pvoptix.pvoptix.models.parameters import default_coeffs
+import numpy as np
 
 
 def pv_rmse_objective(

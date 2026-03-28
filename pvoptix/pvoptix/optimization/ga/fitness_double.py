@@ -41,7 +41,7 @@ def global_rmse_double(
     if coefficients is None:
         coefficients = default_coeffs
 
-    # Decode STC parameters from genome
+    # Decode STC parameters from genome (individual is the normalized genome)
     stc_params = decode_individual_double(individual)
 
     Rs_stc = float(stc_params["Rs"])

@@ -2,6 +2,8 @@
 PV-specific objective function for double-diode model (7 parameters).
 """
 
+import numpy as np
+
 from pvoptix.pvoptix.optimization.ga.fitness_double import global_rmse_double
 from pvoptix.pvoptix.optimization.ga.genome_mapping_double import decode_individual_double
 from pvoptix.pvoptix.models.parameters import default_coeffs
@@ -28,5 +30,5 @@ def pv_rmse_objective_double(
     if coefficients is None:
         coefficients = default_coeffs
 
-    stc_params = decode_individual_double(individual)
-    return global_rmse_double(stc_params, datasets, Ns, coefficients=coefficients)
+    # Directly pass the individual to global_rmse_double
+    return global_rmse_double(individual, datasets, Ns, coefficients=coefficients)

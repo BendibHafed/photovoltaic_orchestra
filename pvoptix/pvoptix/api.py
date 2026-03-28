@@ -162,7 +162,10 @@ def evaluate_double_parameters(
     if coefficients is None:
         coefficients = default_coeffs
 
+    # Encode the parameters into a normalized genome
     individual = encode_individual_double(stc_params)
+    
+    # Call the objective function with the individual
     return pv_rmse_objective_double(individual, datasets, ns, coefficients)
 
 
