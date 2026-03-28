@@ -36,9 +36,9 @@ print(f"\n3. Evaluation result:")
 print(f"   RMSE = {rmse:.10f}")
 
 if rmse < 0.01:
-    print("   ✓ Perfect fit (RMSE very small)")
+    print("-- Perfect fit (RMSE very small)")
 else:
-    print("   ✗ Not a perfect fit (unexpected)")
+    print("-- Not a perfect fit (unexpected)")
 
 # Test with different parameters
 params_diff = {
@@ -56,9 +56,9 @@ rmse2 = evaluate_double_parameters(params_diff, [dataset], ns=36)
 print(f"   RMSE = {rmse2:.10f}")
 
 if rmse2 > rmse:
-    print("   ✓ Different parameters give larger error (expected)")
+    print("-- Different parameters give larger error (expected)")
 else:
-    print("   ✗ Different parameters gave smaller error (unexpected)")
+    print("-- Different parameters gave smaller error (unexpected)")
 
 print("\n" + "=" * 50)
 print("Test complete!")
