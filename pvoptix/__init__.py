@@ -9,7 +9,7 @@ Author: BENDIB HE.
 Version: 2.0.0
 """
 
-__version__ = "2.0.0"
+__version__ = "1.0.0"
 __author__ = "BENDIB HE."
 __license__ = "MIT"
 

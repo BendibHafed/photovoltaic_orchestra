@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pvoptix"
-version = "0.1.0"
+version = "1.0.0"
 description = "PV optimization engine with double-diode model and progressive multi-condition parameter extraction"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "BENDIB HE.", email = "toufik.bendib@hns-re2sd.dz" }
+    { name = "BENDIB HE.", email = "he.bendib@hns-re2sd.dz" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
