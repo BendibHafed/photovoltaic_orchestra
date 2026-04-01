@@ -162,11 +162,24 @@ def evaluate_double_parameters(
     if coefficients is None:
         coefficients = default_coeffs
 
+    # Validate input parameters
+    required_keys = ['Rs', 'Rsh', 'I01', 'I02', 'Iph', 'n1', 'n2']
+    missing_keys = [k for k in required_keys if k not in stc_params]
+    if missing_keys:
+        raise KeyError(f"Missing required parameters: {missing_keys}. Got: {list(stc_params.keys())}")
+
     # Encode the parameters into a normalized genome
-    individual = encode_individual_double(stc_params)
-    
+    try:
+        individual = encode_individual_double(stc_params)
+    except Exception as e:
+        raise ValueError(f"Failed to encode parameters: {e}. Parameters: {stc_params}")
+
     # Call the objective function with the individual
-    return pv_rmse_objective_double(individual, datasets, ns, coefficients)
+    try:
+        rmse = pv_rmse_objective_double(individual, datasets, ns, coefficients)
+        return rmse
+    except Exception as e:
+        raise RuntimeError(f"Failed to evaluate RMSE: {e}")
 
 
 def optimize_double_multicondition(
@@ -187,6 +200,9 @@ def optimize_double_multicondition(
     seed: int | None = None,
     verbose: bool = False,
     live_plot: bool = False,
+    figsize: tuple = (10, 4),
+    auto_close_plot: bool = True,
+    plot_display_seconds: float = 3,
     on_progress: Callable[[int, int, float, dict[str, float]], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> OptimizationResult:
@@ -194,31 +210,6 @@ def optimize_double_multicondition(
     Optimize double-diode STC parameters using multi-condition GA.
 
     This implements the embedded multi-condition strategy from NCMAI'26 paper.
-    The objective function (Equation 13) minimizes RMSE across ALL datasets
-    simultaneously.
-
-    Args:
-        datasets: List of I-V datasets (real measurements + optional virtual STC)
-        ns: Number of series-connected cells
-        coefficients: Model coefficients
-        pop_size: GA population size
-        generations: Number of generations
-        crossover_rate: Crossover probability
-        mutation_rate: Mutation probability
-        elitism: Keep best individual
-        tournament_size: Tournament selection size
-        diversity_prob: Probability to select non-best for diversity
-        random_init: Random initialization or use init_params
-        init_params: Initial parameter guess
-        noise: Noise for initialization diversity
-        seed: Random seed for reproducibility
-        verbose: Print progress
-        live_plot: Show live convergence plot
-        on_progress: Callback for progress updates
-        should_cancel: Cancellation callback
-
-    Returns:
-        OptimizationResult with best_params and best_fitness
     """
     if coefficients is None:
         coefficients = default_coeffs
@@ -244,8 +235,12 @@ def optimize_double_multicondition(
         diversity_prob=diversity_prob,
         verbose=verbose,
         live_plot=live_plot,
+        figsize=figsize,
+        auto_close_plot=auto_close_plot,
+        plot_display_seconds=plot_display_seconds,
         on_progress=on_progress,
-        should_cancel=should_cancel
+        should_cancel=should_cancel,
+        genome_length=7,
     )
 
     meta = {
@@ -262,6 +257,10 @@ def optimize_double_multicondition(
         "diversity_prob": float(diversity_prob),
         "random_init": bool(random_init),
         "noise": float(noise),
+        "live_plot": live_plot,
+        "figsize": figsize,
+        "auto_close_plot": auto_close_plot,
+        "plot_display_seconds": plot_display_seconds,
     }
 
     return OptimizationResult(
@@ -329,23 +328,12 @@ def optimize_double_progressive(
     """
     Progressive optimization accumulating scans over time (Friend's idea).
 
-    Algorithm:
-    1. Start with first scan + virtual STC → θ₁
-    2. For each new scan:
-       a. Add scan to accumulated dataset
-       b. Optimize θ_new on ALL accumulated scans + virtual STC
-       c. Evaluate previous best θ_prev on current dataset
-       d. Keep the one with lower RMSE
-    3. Return best θ after all scans
-
-    This ensures the final parameters work for ALL conditions encountered.
-
     Args:
         scan_stream: Iterator yielding scan dicts with keys: V, I, T, G
         ns: Number of series-connected cells
         coefficients: Model coefficients
         include_virtual_stc: Whether to include virtual STC curve
-        ga_kwargs: Additional arguments for optimize_double_multicondition
+        ga_kwargs: Additional arguments for GA (pop_size, generations, etc.)
         verbose: Print progress
 
     Returns:
@@ -356,6 +344,16 @@ def optimize_double_progressive(
     if coefficients is None:
         coefficients = default_coeffs
 
+    # Define parameters that belong to run_ga only (not to optimize_double_multicondition)
+    run_ga_only_params = {'figsize', 'auto_close_plot', 'plot_display_seconds', 
+                          'on_progress', 'should_cancel'}
+    
+    # Separate kwargs: those for optimize_double_multicondition and those for run_ga
+    # Note: optimize_double_multicondition accepts all GA params except run_ga_only_params
+    # So we need to remove run_ga_only_params from the kwargs passed to it
+    optimization_kwargs = {k: v for k, v in ga_kwargs.items() 
+                           if k not in run_ga_only_params}
+    
     all_scans = []
     best_theta = None
     best_rmse = float('inf')
@@ -373,7 +371,8 @@ def optimize_double_progressive(
         # Build dataset: real scans + virtual STC
         datasets = all_scans.copy()
         if include_virtual_stc:
-            datasets.append(create_virtual_stc_curve_double(ns=ns))
+            virtual_stc = create_virtual_stc_curve_double(ns=ns)
+            datasets.append(virtual_stc)
 
         if verbose:
             print(f"\n[Scan {scan_count}] {len(all_scans)} real scans + "
@@ -384,7 +383,7 @@ def optimize_double_progressive(
             datasets=datasets,
             ns=ns,
             coefficients=coefficients,
-            **ga_kwargs
+            **optimization_kwargs
         )
         theta_new = result_new.best_params
         rmse_new = result_new.best_fitness
@@ -394,34 +393,45 @@ def optimize_double_progressive(
 
         # Compare with previous best if exists
         if best_theta is not None:
-            rmse_prev = evaluate_double_parameters(
-                best_theta, datasets, ns, coefficients
-            )
-            if verbose:
-                print(f"  → Previous best RMSE: {rmse_prev:.6f}")
+            try:
+                rmse_prev = evaluate_double_parameters(
+                    best_theta, datasets, ns, coefficients
+                )
+                if verbose:
+                    print(f"  → Previous best RMSE: {rmse_prev:.6f}")
 
-            if rmse_prev < rmse_new:
+                if rmse_prev < rmse_new:
+                    # Previous is better - keep it
+                    if verbose:
+                        print(f"  → Previous θ remains best")
+                else:
+                    # New is better - update
+                    best_theta = theta_new.copy()
+                    best_rmse = rmse_new
+                    if verbose:
+                        print(f"  → NEW BEST θ!")
+            except Exception as e:
+                # If evaluation fails, use the new one
                 if verbose:
-                    print(f"  → Previous θ remains best")
-            else:
-                best_theta = theta_new
+                    print(f"  → Evaluation failed ({e}), using new θ")
+                best_theta = theta_new.copy()
                 best_rmse = rmse_new
-                if verbose:
-                    print(f"  → NEW BEST θ!")
         else:
-            best_theta = theta_new
+            # First scan
+            best_theta = theta_new.copy()
             best_rmse = rmse_new
             if verbose:
-                print(f"  → Initial best θ")
+                print(f"  → Initial best θ (RMSE: {best_rmse:.6f})")
 
+        # Store history
         history.append({
             'scan_id': scan_count,
             'n_scans': len(all_scans),
             'theta_new': theta_new,
             'rmse_new': rmse_new,
-            'theta_best': best_theta.copy(),
+            'theta_best': best_theta.copy() if best_theta else None,
             'rmse_best': best_rmse,
-            'improved': best_theta == theta_new
+            'improved': best_theta == theta_new if best_theta else True
         })
 
     print("\n" + "=" * 70)
@@ -444,7 +454,6 @@ def optimize_double_progressive(
         }
     )
 
-
 # =============================================================================
 # LEGACY API (Single-diode - kept for backward compatibility)
 # =============================================================================
@@ -461,6 +470,8 @@ def simulate_iv_curve_stc(
     """Legacy: Single-diode I-V simulation."""
     if coefficients is None:
         coefficients = default_coeffs
+
+    from pvoptix.pvoptix.models.parameters import i0_model
 
     Rs_stc = float(stc_params["Rs"])
     Rsh_stc = float(stc_params["Rsh"])
@@ -509,6 +520,8 @@ def optimize_stc_parameters_from_datasets(
     seed: int | None = None,
     verbose: bool = False,
     live_plot: bool = False,
+    auto_close_plot: bool = True,
+    plot_display_seconds: float = 3,
     on_progress: Callable[[int, int, float, dict[str, float]], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> OptimizationResult:
@@ -537,8 +550,11 @@ def optimize_stc_parameters_from_datasets(
         diversity_prob=diversity_prob,
         verbose=verbose,
         live_plot=live_plot,
+        auto_close_plot=auto_close_plot,
+        plot_display_seconds=plot_display_seconds,
         on_progress=on_progress,
-        should_cancel=should_cancel
+        should_cancel=should_cancel,
+        genome_length=5,  # Single-diode has 5 parameters
     )
 
     meta = {
@@ -553,6 +569,8 @@ def optimize_stc_parameters_from_datasets(
         "diversity_prob": float(diversity_prob),
         "random_init": bool(random_init),
         "noise": float(noise),
+        "auto_close_plot": auto_close_plot,
+        "plot_display_seconds": plot_display_seconds,
     }
 
     return OptimizationResult(

@@ -5,13 +5,7 @@ Population initialization for GA.
 import numpy as np
 
 
-def initialize_population(
-    pop_size: int,
-    genome_length: int = 5,
-    random: bool = True,
-    init_params: dict = None,
-    noise: float = 0.0,
-) -> np.ndarray:
+def initialize_population(pop_size, genome_length=5, random=True, init_params=None, noise=0.0):
     """
     Initialize a population of individuals for the GA.
     Each individual is represented as a vector of normalized genes in [0,1].
@@ -34,18 +28,26 @@ def initialize_population(
     population : ndarray
         Array of shape (pop_size, genome_length) with values in [0,1]
     """
-    # For now, just return random population
-    # Will be fully implemented when genome mapping is added
+    import numpy as np
+    from pvoptix.pvoptix.optimization.ga.genome_mapping import encode_individual
+    from pvoptix.pvoptix.optimization.ga.genome_mapping_double import encode_individual_double
+
     if not random:
         if init_params is None:
             raise ValueError("init_params must be provided when random=False")
-        # Placeholder: create population around init_params
-        # Will use encode_individual when available
-        base = np.array([0.5] * genome_length)
-        population = np.tile(base, (pop_size, 1))
+        
+        # Encode based on parameter count
+        if genome_length == 7:
+            base_individual = encode_individual_double(init_params)
+        else:
+            base_individual = encode_individual(init_params)
+
         if noise > 0.0:
+            population = np.tile(base_individual, (pop_size, 1))
             population += np.random.normal(0, noise, population.shape)
             population = np.clip(population, 0.0, 1.0)
+        else:
+            population = np.tile(base_individual, (pop_size, 1))
     else:
         # Random uniform initialization in [0,1]
         population = np.random.rand(pop_size, genome_length)

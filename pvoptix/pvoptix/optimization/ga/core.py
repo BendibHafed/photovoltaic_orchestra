@@ -28,11 +28,13 @@ def run_ga(
     figsize=(10, 4),
     on_progress=None,
     should_cancel=None,
+    genome_length=None,
+    auto_close_plot=True,
+    plot_display_seconds=3,
 ):
     """
     Core GA loop.
-    This GA is completely decoupled from PV domain.
-
+    
     Parameters
     ----------
     objective_function : callable
@@ -63,6 +65,16 @@ def run_ga(
         Show live matplotlib convergence
     figsize : tuple
         Figure size for live plotting
+    on_progress : callable, optional
+        Callback for progress updates
+    should_cancel : callable, optional
+        Cancellation callback
+    genome_length : int, optional
+        Explicit genome length. If None, inferred from init_params or default 5.
+    auto_close_plot : bool
+        If True, automatically close the plot after GA finishes
+    plot_display_seconds : float
+        Seconds to display the plot before auto-closing (if auto_close_plot=True)
 
     Returns
     -------
@@ -73,7 +85,6 @@ def run_ga(
     history : list
         History of (fitness, decoded_params) per generation
     """
-
     # --- Import GA utilities locally ---
     import matplotlib
 
@@ -81,13 +92,22 @@ def run_ga(
     from pvoptix.pvoptix.optimization.ga.mutation import mutate
     from pvoptix.pvoptix.optimization.ga.population import initialize_population
     from pvoptix.pvoptix.optimization.ga.selection import tournament_selection
+    from pvoptix.pvoptix.optimization.ga.genome_mapping import decode_individual
+    from pvoptix.pvoptix.optimization.ga.genome_mapping_double import decode_individual_double
 
+    # Set matplotlib backend based on live_plot setting
     if not live_plot:
         matplotlib.use("Agg")
+    
     import matplotlib.pyplot as plt
 
-    # Determine genome length from init_params or default (5 for single, 7 for double)
-    genome_length = len(init_params) if init_params else 5
+    # Determine genome length
+    if genome_length is None:
+        if init_params is not None:
+            genome_length = len(init_params)
+        else:
+            genome_length = 5  # Default for single-diode
+    
     if seed is not None:
         np.random.seed(int(seed))
 
@@ -104,6 +124,11 @@ def run_ga(
     best_fitness = float("inf")
 
     # --- Setup live plotting ---
+    fig = None
+    ax = None
+    line_best = None
+    line_mean = None
+    
     if live_plot:
         plt.ion()
         fig, ax = plt.subplots(figsize=figsize)
@@ -114,6 +139,7 @@ def run_ga(
         ax.set_title("GA Convergence")
         ax.legend()
         ax.grid(True)
+        plt.tight_layout()
 
     for gen in range(generations):
         if should_cancel is not None and should_cancel():
@@ -131,12 +157,22 @@ def run_ga(
             best_fitness = gen_best_fitness
             best_individual = gen_best_individual
 
-        # Store history (to be implemented with proper decoder)
-        history.append((gen_best_fitness, {"temp": gen_best_fitness}))
+        # Decode the best individual for history (based on genome length)
+        if genome_length == 7:
+            decoded = decode_individual_double(gen_best_individual)
+        else:
+            decoded = decode_individual(gen_best_individual)
+        
+        history.append((gen_best_fitness, decoded))
 
         if on_progress is not None:
-            on_progress(gen + 1, generations, float(best_fitness), {})
-
+            # Report progress using 1-based generation index
+            if genome_length == 7:
+                progress_params = decode_individual_double(best_individual) if best_individual is not None else {}
+            else:
+                progress_params = decode_individual(best_individual) if best_individual is not None else {}
+            on_progress(gen + 1, generations, float(best_fitness), progress_params)
+            
         if verbose:
             mean_fit = float(np.mean(fitness_values))
             print(
@@ -145,15 +181,19 @@ def run_ga(
             )
 
         # --- Live plot update ---
-        if live_plot:
+        if live_plot and fig is not None and ax is not None:
             rmse_best = [entry[0] for entry in history]
             rmse_mean = rmse_best[:-1] + [np.mean(fitness_values)]
             line_best.set_xdata(range(len(rmse_best)))
             line_best.set_ydata(rmse_best)
             line_mean.set_xdata(range(len(rmse_mean)))
             line_mean.set_ydata(rmse_mean)
+            
+            # Update axis limits
             ax.relim()
             ax.autoscale_view()
+            
+            # Redraw
             plt.draw()
             plt.pause(0.01)
 
@@ -175,9 +215,26 @@ def run_ga(
         population = offspring
 
     # --- Return decoded best individual ---
-    # To be implemented with proper decoder
-    best_params = {}
-    if live_plot:
+    if best_individual is not None:
+        if genome_length == 7:
+            best_params = decode_individual_double(best_individual)
+        else:
+            best_params = decode_individual(best_individual)
+    else:
+        best_params = {}
+        
+    # --- Handle plot display and auto-closing ---
+    if live_plot and fig is not None:
         plt.ioff()
-        plt.show()
+        
+        if auto_close_plot:
+            # Non-blocking display with auto-close
+            plt.show(block=False)
+            print(f"\n📊 GA convergence plot displayed. Closing in {plot_display_seconds} seconds...")
+            plt.pause(plot_display_seconds)
+            plt.close(fig)
+        else:
+            # Block until user closes the window
+            plt.show()
+            
     return best_params, best_fitness, history
