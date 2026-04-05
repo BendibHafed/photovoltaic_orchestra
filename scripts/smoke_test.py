@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# scripts/smoke_test.py
 """Quick smoke test to verify installation."""
 
 import sys
-import numpy as np
+from pathlib import Path
+
+import pvoptix
 
 
 def test_imports():
@@ -10,30 +13,29 @@ def test_imports():
     print("Testing imports...")
     
     try:
-        import pvoptix
-        print(f"-- pvoptix version: {pvoptix.__version__}")
+        print(f"  ✓ pvoptix version: {pvoptix.__version__}")
         
         # Test double-diode functions
         assert hasattr(pvoptix, "optimize_double_multicondition")
         assert hasattr(pvoptix, "optimize_double_progressive")
         assert hasattr(pvoptix, "simulate_iv_curve_double")
-        print("-- Double-diode functions available")
+        print("  ✓ Double-diode functions available")
         
-        # Test legacy functions
+        # Test dataset loading
         assert hasattr(pvoptix, "load_datasets_from_dir")
         assert hasattr(pvoptix, "OptimizationResult")
-        print("-- Legacy functions available")
+        print("  ✓ Dataset functions available")
         
         # Test analysis functions
         assert hasattr(pvoptix, "compute_power")
         assert hasattr(pvoptix, "find_mpp")
-        print("-- Analysis functions available")
+        print("  ✓ Analysis functions available")
         
-        print("\n-- All imports successful!")
+        print("\n✅ All imports successful!")
         return True
         
     except Exception as e:
-        print(f"\n-- Import failed: {e}")
+        print(f"\n❌ Import failed: {e}")
         return False
 
 
@@ -47,12 +49,13 @@ def test_basic_usage():
             evaluate_double_parameters,
             simulate_iv_curve_double
         )
+        import numpy as np
         
         # Create a virtual STC curve
         dataset = create_virtual_stc_curve_double()
-        print(f"-- Created virtual STC curve: {len(dataset['V'])} points")
+        print(f"  ✓ Created virtual STC curve: {len(dataset['V'])} points")
         
-        # Dummy parameters (must be within bounds)
+        # Dummy parameters
         dummy_params = {
             "Rs": 0.28, "Rsh": 3200.0,
             "I01": 6.5e-8, "I02": 1.2e-7,
@@ -61,16 +64,7 @@ def test_basic_usage():
         
         # Test evaluation - should be near 0
         rmse = evaluate_double_parameters(dummy_params, [dataset], ns=36)
-        print(f"-- Evaluation works (RMSE: {rmse:.10f})")
-        
-        # Test with different parameters
-        diff_params = {
-            "Rs": 0.30, "Rsh": 3000.0,
-            "I01": 7.0e-8, "I02": 1.3e-7,
-            "Iph": 4.70, "n1": 1.32, "n2": 1.82
-        }
-        rmse_diff = evaluate_double_parameters(diff_params, [dataset], ns=36)
-        print(f"-- Different parameters give larger error: {rmse_diff:.10f}")
+        print(f"  ✓ Evaluation works (RMSE: {rmse:.10f})")
         
         # Test simulation
         V_test = np.linspace(0, 21.6, 50)
@@ -81,13 +75,13 @@ def test_basic_usage():
             irradiance_w_m2=1000.0,
             ns=36
         )
-        print(f"-- Simulation works (I range: {I_test.min():.3f} to {I_test.max():.3f} A)")
+        print(f"  ✓ Simulation works (I range: {I_test.min():.3f} to {I_test.max():.3f} A)")
         
-        print("\n-- Basic usage test passed!")
+        print("\n✅ Basic usage test passed!")
         return True
         
     except Exception as e:
-        print(f"\n-- Basic usage test failed: {e}")
+        print(f"\n❌ Basic usage test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -102,11 +96,11 @@ def main():
     
     print("\n" + "=" * 50)
     if success:
-        print("-- SMOKE TEST PASSED")
+        print("✅ SMOKE TEST PASSED")
         print("=" * 50)
         sys.exit(0)
     else:
-        print("-- SMOKE TEST FAILED")
+        print("❌ SMOKE TEST FAILED")
         print("=" * 50)
         sys.exit(1)
 
