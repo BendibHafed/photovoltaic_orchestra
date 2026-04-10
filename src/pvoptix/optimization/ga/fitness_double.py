@@ -1,7 +1,8 @@
 """
 Fitness function for double-diode model (7 parameters).
 
-Implements Equation (13) from NCMAI'26 paper.
+Implements Equation (14) from NCMAI'26 paper:
+RMSE_global = sqrt( 1/M * sum_{j=1}^{M} (1/N_j * sum_{i=1}^{N_j} (I_mes - I_cal)²) )
 """
 
 import numpy as np
@@ -29,6 +30,9 @@ def global_rmse_double(
 
     Implements Equation (14) from NCMAI'26 paper:
     RMSE_global = sqrt( 1/M * sum_{j=1}^{M} (1/N_j * sum_{i=1}^{N_j} (I_mes - I_cal)²) )
+
+    The RMSE is computed in absolute Amperes (no normalization by I_ph),
+    which matches the paper's Equation (11) and provides physically meaningful units.
     """
     if coefficients is None:
         coefficients = default_coeffs
@@ -43,7 +47,7 @@ def global_rmse_double(
     n1 = float(stc_params["n1"])
     n2 = float(stc_params["n2"])
 
-    sum_condition_rmse_sq = 0.0
+    sum_condition_mse = 0.0
     num_conditions = len(datasets)
 
     for data in datasets:
@@ -70,22 +74,24 @@ def global_rmse_double(
             "Iph": Iph, "n1": n1, "n2": n2,
         }
 
-        # Compute mean squared error for this condition
+        # Compute mean squared error for this condition (absolute error in Amperes)
         sq_errors = []
         for V_meas, I_meas in zip(V_exp, I_exp, strict=True):
             try:
                 I_cal = solve_current_double(V_meas, T, params_op, Ns)
                 if not np.isfinite(I_cal):
                     raise ValueError("Invalid current")
+                # Absolute error squared (Amperes²) - NO division by I_ph
                 sq_errors.append((I_cal - I_meas) ** 2)
             except Exception:
+                # Penalize solver failures (1A error)
                 sq_errors.append(1.0)
 
-        # MSE for this condition (without sqrt yet)
+        # MSE for this condition (Amperes²)
         condition_mse = np.mean(sq_errors)
-        sum_condition_rmse_sq += condition_mse
+        sum_condition_mse += condition_mse
 
-    # Equation (14): outer square root
-    global_rmse = np.sqrt(sum_condition_rmse_sq / num_conditions)
+    # Equation (14): outer square root gives RMSE in Amperes
+    global_rmse = np.sqrt(sum_condition_mse / num_conditions)
 
     return float(global_rmse)
