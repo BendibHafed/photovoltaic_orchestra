@@ -10,9 +10,9 @@ import numpy as np
 # Based on S75 module specifications and typical values
 BOUNDS_DOUBLE = {
     "Rs": (0.001, 1.0),      # Series resistance [Ω]
-    "Rsh": (10.0, 5000.0),   # Shunt resistance [Ω]
-    "I01": (1e-12, 1e-6),    # Diode 1 saturation current [A] (log scale)
-    "I02": (1e-12, 1e-6),    # Diode 2 saturation current [A] (log scale)
+    "Rsh": (10.0, 6000.0),   # Shunt resistance [Ω]
+    "I01": (1e-12, 1e-7),    # Diode 1 saturation current [A] (log scale)
+    "I02": (1e-12, 1e-7),    # Diode 2 saturation current [A] (log scale)
     "Iph": (0.1, 10.0),      # Photogenerated current [A]
     "n1": (1.0, 2.0),        # Diode 1 ideality factor
     "n2": (1.0, 2.0),        # Diode 2 ideality factor

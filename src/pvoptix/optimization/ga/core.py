@@ -50,7 +50,7 @@ def run_ga(
         diversity_prob: Probability to select non-best (diversity)
         verbose: Print progress
         live_plot: Show live convergence plot
-        figsize: Figure size for live plot
+        figsize: Figure size for live plotting
         on_progress: Progress callback
         should_cancel: Cancellation callback
         genome_length: Number of genes (7 for double-diode)
@@ -69,8 +69,11 @@ def run_ga(
     from pvoptix.optimization.ga.selection import tournament_selection
     from pvoptix.optimization.ga.genome_mapping_double import decode_individual_double
 
-    if not live_plot:
-        matplotlib.use("Agg")
+    # Note: Do not change the global matplotlib backend here.
+    # The user should set their preferred backend before calling this function.
+    # This prevents interfering with interactive plots in the main program.
+    # if not live_plot:
+    #     matplotlib.use("Agg")
 
     import matplotlib.pyplot as plt
 
@@ -176,7 +179,7 @@ def run_ga(
         plt.ioff()
         if auto_close_plot:
             plt.show(block=False)
-            print(f"\n Plot closing in {plot_display_seconds} seconds...")
+            print(f"\nPlot closing in {plot_display_seconds} seconds...")
             plt.pause(plot_display_seconds)
             plt.close(fig)
         else:
